@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beyond the Feed - Drama Interactivo</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        tiktokCyan: '#25F4EE',
+                        tiktokPink: '#FE2C55',
+                        darkBackground: '#0B0C10',
+                        darkCard: '#1F2833',
+                        neonBlue: '#45A29E',
+                        glitchRed: '#FF1E56'
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        serif: ['Cinzel', 'serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #050508;
+            color: #E0E6ED;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        /* Cinematic 21:9 Letterbox toggleable */
+        .cinematic-bars::before,
+        .cinematic-bars::after {
+            content: '';
+            position: fixed;
+            left: 0;
+            width: 100%;
+            height: 7vh;
+            background-color: #000;
+            z-index: 40;
+            transition: all 0.5s ease;
+            pointer-events: none;
+        }
+        .cinematic-bars::before { top: 0; }
+        .cinematic-bars::after { bottom: 0; }
+
+        /* Glitch & Specter Effects */
+        .specter-mode {
+            filter: hue-rotate(180deg) contrast(1.3) saturate(1.5);
+            transition: filter 0.5s cubic-bezier(0.1, 0.9, 0.2, 1);
+        }
+
+        @keyframes glitchNoise {
+            0% { transform: translate(0); }
+            20% { transform: translate(-3px, 3px); }
+            40% { transform: translate(-3px, -3px); }
+            60% { transform: translate(3px, 3px); }
+            80% { transform: translate(3px, -3px); }
+            100% { transform: translate(0); }
+        }
+        .glitch-anim {
+            animation: glitchNoise 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+        }
+
+        /* QTE Pulse Animation */
+        @keyframes qteExpand {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+        .qte-ring {
+            animation: qteExpand 1.5s infinite linear;
+        }
+
+        /* Scanline Overlay for algorithm perspective */
+        .scanline-overlay {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0, 242, 234, 0.08) 50%,
+                rgba(0, 242, 234, 0.08)
+            );
+            background-size: 100% 4px;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0b0c10; }
+        ::-webkit-scrollbar-thumb { background: #FE2C55; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between relative cinematic-bars selection:bg-tiktokPink selection:text-white">
+
+    <!-- OVERLAY: Specter / Algorithm Mode Grid -->
+    <div id="algorithm-overlay" class="fixed inset-0 pointer-events-none z-30 scanline-overlay opacity-0 transition-opacity duration-500 border-4 border-tiktokCyan/30">
+        <div class="absolute top-10 left-10 text-xs font-mono text-tiktokCyan tracking-widest bg-black/80 px-3 py-1 rounded border border-tiktokCyan/50">
+            <i class="fa-solid fa-eye animate-pulse mr-2"></i>MODO ALGORITMO: LECTURA DE MENTES & FEED
+        </div>
+    </div>
+
+    <!-- SOUND & HUD TOP BAR -->
+    <header class="fixed top-0 left-0 w-full z-50 px-6 py-4 flex justify-between items-center bg-gradient-to-b from-black/90 to-transparent">
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2">
+                <span class="w-3 h-3 rounded-full bg-tiktokPink animate-ping"></span>
+                <h1 class="font-serif font-bold text-lg tracking-wider text-white">BEYOND <span class="text-tiktokCyan text-sm font-sans font-normal">THE FEED</span></h1>
+            </div>
+            <span id="chapter-title-badge" class="hidden md:inline-block text-xs font-mono bg-white/10 px-3 py-1 rounded-full border border-white/20 text-gray-300">
+                Capítulo 1: El Impulso Inicial
+            </span>
+        </div>
+
+        <!-- STATS HUD METRICS -->
+        <div class="flex items-center space-x-6 text-xs sm:text-sm font-medium">
+            <!-- Mental Health / Stress -->
+            <div class="flex items-center space-x-2 bg-black/60 px-3 py-1.5 rounded-xl border border-white/10" title="Salud Mental / Estrés">
+                <i class="fa-solid fa-brain text-purple-400"></i>
+                <div class="w-16 sm:w-24 bg-gray-800 rounded-full h-2 overflow-hidden border border-gray-700">
+                    <div id="bar-mental" class="bg-gradient-to-r from-purple-500 to-pink-500 h-full w-4/5 transition-all duration-500"></div>
+                </div>
+                <span id="val-mental" class="font-mono text-xs text-purple-300">80%</span>
+            </div>
+
+            <!-- Followers Count -->
+            <div class="flex items-center space-x-2 bg-black/60 px-3 py-1.5 rounded-xl border border-white/10" title="Alcance / Seguidores">
+                <i class="fa-solid fa-users text-tiktokCyan"></i>
+                <span id="val-followers" class="font-mono text-xs font-bold text-tiktokCyan">1.2K</span>
+            </div>
+
+            <!-- Genuine Friendship -->
+            <div class="flex items-center space-x-2 bg-black/60 px-3 py-1.5 rounded-xl border border-white/10" title="Conexión Real con Amigos">
+                <i class="fa-solid fa-heart text-tiktokPink"></i>
+                <span id="val-friendship" class="font-mono text-xs text-tiktokPink">90%</span>
+            </div>
+
+            <!-- Audio Toggle Button -->
+            <button id="btn-audio" onclick="toggleAudio()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition">
+                <i class="fa-solid fa-volume-high text-xs" id="audio-icon"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN SCENE CONTAINER -->
+    <main class="flex-grow flex items-center justify-center relative px-4 py-16 z-20 max-w-6xl mx-auto w-full">
+        
+        <!-- START SCREEN -->
+        <div id="screen-start" class="text-center max-w-2xl mx-auto flex flex-col items-center">
+            <div class="relative mb-6">
+                <div class="w-24 h-24 rounded-full bg-gradient-to-tr from-tiktokPink via-purple-600 to-tiktokCyan p-1 shadow-2xl animate-pulse">
+                    <img id="avatar-preview" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80" class="w-full h-full rounded-full object-cover border-2 border-black" alt="Influencer Avatar">
+                </div>
+                <div class="absolute -bottom-2 -right-2 bg-black text-tiktokCyan text-xs px-2 py-0.5 rounded-full border border-tiktokCyan font-mono">LIVE</div>
+            </div>
+
+            <h1 class="font-serif text-4xl sm:text-6xl font-extrabold tracking-tight mb-3 text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500">
+                BEYOND THE FEED
+            </h1>
+            <p class="text-gray-400 text-sm sm:text-base mb-8 max-w-md">
+                Un drama psicológico e interactivo. Decide qué sacrificarás para mantenerte en la cima del algoritmo.
+            </p>
+
+            <!-- Character Selection -->
+            <div class="mb-8 w-full">
+                <label class="block text-xs font-mono text-tiktokCyan uppercase tracking-widest mb-3">Elige a tu Protagonista:</label>
+                <div class="flex justify-center gap-4">
+                    <button onclick="selectProtagonist('Mateo')" id="btn-mateo" class="flex-1 max-w-[160px] py-3 px-4 rounded-xl border border-tiktokPink bg-tiktokPink/20 text-white font-bold text-sm transition hover:bg-tiktokPink/40 focus:ring-2 focus:ring-tiktokPink">
+                        <i class="fa-solid fa-user-astronaut mr-2"></i> Mateo
+                    </button>
+                    <button onclick="selectProtagonist('Sofía')" id="btn-sofia" class="flex-1 max-w-[160px] py-3 px-4 rounded-xl border border-gray-700 bg-white/5 text-gray-400 font-bold text-sm transition hover:bg-white/10 focus:ring-2 focus:ring-tiktokCyan">
+                        <i class="fa-solid fa-user-ninja mr-2"></i> Sofía
+                    </button>
+                </div>
+            </div>
+
+            <button onclick="startGame()" class="px-8 py-4 bg-gradient-to-r from-tiktokPink to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-base rounded-2xl shadow-xl hover:shadow-tiktokPink/30 transition transform hover:-translate-y-0.5 active:scale-95 flex items-center gap-3">
+                <i class="fa-solid fa-play"></i> INICIAR HISTORIA
+            </button>
+        </div>
+
+        <!-- GAMEPLAY / CINEMATIC SCREEN -->
+        <div id="screen-gameplay" class="hidden w-full grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+
+            <!-- LEFT/MAIN: Cinematic Story Display -->
+            <div class="lg:col-span-8 flex flex-col justify-between bg-darkCard/80 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-white/10 shadow-2xl relative overflow-hidden min-h-[480px]">
+                
+                <!-- Environment Visual Backdrop Overlay -->
+                <div id="scene-bg-image" class="absolute inset-0 bg-cover bg-center opacity-25 pointer-events-none transition-all duration-700" style="background-image: url('https://images.unsplash.com/photo-1598550476439-6847785fcea6?w=1000&auto=format&fit=crop&q=80');"></div>
+                <div class="absolute inset-0 bg-gradient-to-t from-darkBackground via-darkBackground/70 to-transparent pointer-events-none"></div>
+
+                <!-- Entity Perspective Switcher Bar -->
+                <div class="relative z-10 flex justify-between items-center mb-6 border-b border-white/10 pb-3">
+                    <div id="perspective-tag" class="text-xs font-mono px-3 py-1 rounded-md bg-purple-900/60 text-purple-300 border border-purple-500/30">
+                        <i class="fa-solid fa-user text-xs mr-1.5"></i> Perspectiva: <span id="current-character-name">Mateo</span>
+                    </div>
+
+                    <button id="btn-toggle-specter" onclick="toggleSpecterMode()" class="text-xs font-mono bg-tiktokCyan/10 hover:bg-tiktokCyan/20 text-tiktokCyan px-3 py-1 rounded-md border border-tiktokCyan/40 transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-ghost"></i> <span id="specter-btn-text">Ver Mentes (Algoritmo)</span>
+                    </button>
+                </div>
+
+                <!-- Story Text / Narrative Content -->
+                <div class="relative z-10 my-auto">
+                    <p id="narrative-location" class="text-xs font-mono text-tiktokPink uppercase tracking-widest mb-2"></p>
+                    <h2 id="narrative-heading" class="font-serif text-2xl sm:text-3xl font-bold text-white mb-4 leading-tight"></h2>
+                    <p id="narrative-body" class="text-gray-300 text-sm sm:text-base leading-relaxed mb-6 font-light"></p>
+
+                    <!-- Hidden Algorithm / Specter Whispers -->
+                    <div id="algorithm-thought-box" class="hidden bg-tiktokCyan/10 border-l-4 border-tiktokCyan p-4 rounded-r-xl mb-6 backdrop-blur-sm">
+                        <p class="text-xs font-mono text-tiktokCyan uppercase font-bold mb-1"><i class="fa-solid fa-network-wired mr-1"></i> Análisis Algorítmico Subliminal:</p>
+                        <p id="algorithm-thought-text" class="text-xs italic text-cyan-100"></p>
+                    </div>
+                </div>
+
+                <!-- QTE Interactive Prompt Container -->
+                <div id="qte-container" class="hidden relative z-20 my-4 bg-black/80 border border-tiktokPink/50 rounded-2xl p-4 text-center">
+                    <p class="text-xs font-mono text-tiktokPink tracking-widest uppercase mb-2 animate-pulse">¡Quick Time Event!</p>
+                    <p id="qte-prompt" class="text-sm font-bold text-white mb-4"></p>
+                    <div class="relative inline-flex items-center justify-center">
+                        <div class="absolute w-16 h-16 rounded-full border-2 border-tiktokPink qte-ring"></div>
+                        <button id="qte-btn" onclick="triggerQTESuccess()" class="w-14 h-14 rounded-full bg-tiktokPink text-white font-black text-xl shadow-lg active:scale-90 transition flex items-center justify-center">
+                            
+                        </button>
+                    </div>
+                    <div class="w-full bg-gray-800 h-1.5 rounded-full mt-4 overflow-hidden">
+                        <div id="qte-timer-bar" class="bg-tiktokPink h-full w-full transition-all duration-100 ease-linear"></div>
+                    </div>
+                </div>
+
+                <!-- Narrative Choices Buttons Container -->
+                <div id="choices-container" class="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                    <!-- Dynamic choice buttons inserted here -->
+                </div>
+            </div>
+
+            <!-- RIGHT: TikTok Live Simulated Feed & Comments -->
+            <div class="lg:col-span-4 flex flex-col h-[480px] bg-black/90 rounded-3xl border border-white/10 overflow-hidden shadow-2xl relative">
+                
+                <!-- Live Stream Top Header -->
+                <div class="p-3 bg-white/5 border-b border-white/10 flex items-center justify-between text-xs">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                        <span class="font-bold text-white tracking-wide">CHAT EN VIVO</span>
+                    </div>
+                    <span id="live-viewer-count" class="font-mono text-gray-400 text-[11px]"><i class="fa-solid fa-eye text-tiktokPink mr-1"></i> 14,820</span>
+                </div>
+
+                <!-- Scrollable Comments Box -->
+                <div id="chat-feed" class="flex-grow p-4 overflow-y-auto space-y-3 font-sans text-xs">
+                    <!-- Stream comments dynamically appended here -->
+                </div>
+
+                <!-- Simulated Chat Input / Reaction Bar -->
+                <div class="p-3 bg-white/5 border-t border-white/10 flex gap-2 items-center">
+                    <div class="flex-grow bg-white/10 rounded-full px-3 py-1.5 text-xs text-gray-400 font-mono">
+                        Respondiendo al público...
+                    </div>
+                    <button class="text-tiktokPink text-lg hover:scale-110 transition"><i class="fa-solid fa-heart"></i></button>
+                    <button class="text-tiktokCyan text-lg hover:scale-110 transition"><i class="fa-solid fa-fire"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- END OF CHAPTER / FLOWCHART SCREEN -->
+        <div id="screen-summary" class="hidden w-full max-w-4xl bg-darkCard/90 border border-white/10 rounded-3xl p-6 sm:p-10 backdrop-blur-xl shadow-2xl">
+            <div class="text-center mb-8">
+                <span class="text-xs font-mono text-tiktokCyan uppercase tracking-widest">Resumen de Decisión</span>
+                <h2 id="summary-title" class="font-serif text-3xl font-extrabold text-white mt-1">CAPÍTULO COMPLETADO</h2>
+                <p class="text-gray-400 text-sm mt-1">Así es como tu libre albedrío modeló la mente del Algoritmo.</p>
+            </div>
+
+            <!-- Flowchart Tree Diagram -->
+            <div id="summary-flowchart" class="space-y-4 mb-8 bg-black/40 p-6 rounded-2xl border border-white/5 font-mono text-xs">
+                <!-- Dynamic Nodes injected -->
+            </div>
+
+            <!-- Stats Impact Summary -->
+            <div class="grid grid-cols-3 gap-4 mb-8 text-center bg-white/5 p-4 rounded-2xl border border-white/10">
+                <div>
+                    <span class="block text-gray-400 text-xs">Estrés Final</span>
+                    <span id="summary-stat-mental" class="text-lg font-bold text-purple-400">--</span>
+                </div>
+                <div>
+                    <span class="block text-gray-400 text-xs">Seguidores Ganados</span>
+                    <span id="summary-stat-followers" class="text-lg font-bold text-tiktokCyan">--</span>
+                </div>
+                <div>
+                    <span class="block text-gray-400 text-xs">Lealtad Real</span>
+                    <span id="summary-stat-friendship" class="text-lg font-bold text-tiktokPink">--</span>
+                </div>
+            </div>
+
+            <div class="flex justify-center">
+                <button id="btn-next-chapter" onclick="advanceChapter()" class="px-8 py-3.5 bg-gradient-to-r from-tiktokCyan to-blue-600 hover:from-cyan-500 hover:to-blue-700 text-black font-bold text-sm rounded-xl shadow-lg transition">
+                    CONTINUAR SIGUIENTE CAPÍTULO <i class="fa-solid fa-arrow-right ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOTER BRANDING -->
+    <footer class="fixed bottom-2 right-4 z-40 text-[10px] font-mono text-gray-600 pointer-events-none">
+        BEYOND THE FEED &copy; 2026 - EXPERIENCIA NARRATIVA INTERACTIVA
+    </footer>
+
+    <!-- GAME ENGINE & STORY LOGIC DATA -->
+    <script>
+        // Game State Variables
+        let gameState = {
+            protagonist: 'Mateo',
+            currentChapterIndex: 0,
+            currentSceneId: 'c1_start',
+            mentalHealth: 80,
+            followers: 1200,
+            friendship: 90,
+            specterMode: false,
+            choicesHistory: [],
+            isAudioMuted: false
+        };
+
+        // Web Audio API Sound Synthesizer
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            if (gameState.isAudioMuted) return;
+            initAudio();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'click') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.05);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                osc.start(now);
+                osc.stop(now + 0.05);
+            } else if (type === 'glitch') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.linearRampToValueAtTime(600, now + 0.1);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'qte-success') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, now); // C5
+                osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            } else if (type === 'heartbeat') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(60, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.15);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            }
+        }
+
+        function toggleAudio() {
+            gameState.isAudioMuted = !gameState.isAudioMuted;
+            const icon = document.getElementById('audio-icon');
+            if (gameState.isAudioMuted) {
+                icon.className = 'fa-solid fa-volume-xmark text-xs text-red-400';
+            } else {
+                icon.className = 'fa-solid fa-volume-high text-xs';
+                playSound('click');
+            }
+        }
+
+        // Protagonist Selection
+        function selectProtagonist(name) {
+            playSound('click');
+            gameState.protagonist = name;
+            const btnM = document.getElementById('btn-mateo');
+            const btnS = document.getElementById('btn-sofia');
+            const img = document.getElementById('avatar-preview');
+
+            if (name === 'Mateo') {
+                btnM.className = 'flex-1 max-w-[160px] py-3 px-4 rounded-xl border border-tiktokPink bg-tiktokPink/20 text-white font-bold text-sm transition';
+                btnS.className = 'flex-1 max-w-[160px] py-3 px-4 rounded-xl border border-gray-700 bg-white/5 text-gray-400 font-bold text-sm transition';
+                img.src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80';
+            } else {
+                btnS.className = 'flex-1 max-w-[160px] py-3 px-4 rounded-xl border border-tiktokCyan bg-tiktokCyan/20 text-white font-bold text-sm transition';
+                btnM.className = 'flex-1 max-w-[160px] py-3 px-4 rounded-xl border border-gray-700 bg-white/5 text-gray-400 font-bold text-sm transition';
+                img.src = 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&auto=format&fit=crop&q=80';
+            }
+        }
+
+        // Toggle Entity / Specter / Algorithm Mode
+        function toggleSpecterMode() {
+            playSound('glitch');
+            gameState.specterMode = !gameState.specterMode;
+            const overlay = document.getElementById('algorithm-overlay');
+            const btnText = document.getElementById('specter-btn-text');
+            const thoughtBox = document.getElementById('algorithm-thought-box');
+
+            if (gameState.specterMode) {
+                document.body.classList.add('specter-mode');
+                overlay.style.opacity = '1';
+                btnText.innerText = 'Volver a Realidad';
+                thoughtBox.classList.remove('hidden');
+            } else {
+                document.body.classList.remove('specter-mode');
+                overlay.style.opacity = '0';
+                btnText.innerText = 'Ver Mentes (Algoritmo)';
+                thoughtBox.classList.add('hidden');
+            }
+        }
+
+        // STORY DATA STRUCTURE (Branching Narrative Chapters)
+        const CHAPTERS = [
+            {
+                title: "Capítulo 1: El Impulso Inicial",
+                scenes: {
+                    c1_start: {
+                        location: "Dormitorio de {P} - 2:14 AM",
+                        heading: "La Luces Led y la Obsesión",
+                        body: "Llevas 6 horas editando un video de 15 segundos. Tu amigo de la infancia, Leo, te ha enviado 4 mensajes pidiendo que bajes a cenar con la pandilla. Tienes 1,200 seguidores y sientes que este video podría cambiarlo todo... o ser un fracaso más.",
+                        algorithmWhisper: "El patrón de retención de audiencia indica que un conflicto emocional aumentará tus impresiones en un 340%.",
+                        bgImage: "https://images.unsplash.com/photo-1598550476439-6847785fcea6?w=1000&auto=format&fit=crop&q=80",
+                        comments: [
+                            { user: "juan_23", text: "Subelo yaaa 🔥" },
+                            { user: "valen_art", text: "¿Otra vez despierto a esta hora?" }
+                        ],
+                        choices: [
+                            { text: "Publicar video revelando un secreto personal dramático", nextScene: "c1_viral_drama", mentalDelta: -10, followerDelta: +15000, friendshipDelta: -15 },
+                            { text: "Cerrar la laptop e ir con Leo y tus amigos reales", nextScene: "c1_friends_first", mentalDelta: +15, followerDelta: -200, friendshipDelta: +20 }
+                        ]
+                    },
+                    c1_viral_drama: {
+                        location: "Dormitorio - 8:00 AM",
+                        heading: "Explosión Digital",
+                        body: "Te despiertas con el sonido incesante de notificaciones. Tu secreto personal se ha vuelto tendencia #1. Tienes miles de notificaciones, pero un mensaje privado de Leo dice: 'No puedo creer que expusieras esto para ganar likes'.",
+                        algorithmWhisper: "La dopamina está en niveles máximos. La polémica genera interacciones multiplicadas.",
+                        bgImage: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1000&auto=format&fit=crop&q=80",
+                        qte: { prompt: "¡Responde a los 5,000 comentarios en vivo!", key: "SPACE", time: 3.5 },
+                        comments: [
+                            { user: "hype_king", text: "DIOS MIO NO PUEDE SER 😱" },
+                            { user: "sarah_m", text: "Esto es buscar atención claramente" }
+                        ],
+                        choices: [
+                            { text: "Duplicar la apuesta: Hacer un Live llorando para ganar apoyo", nextScene: "c1_end_chapter", mentalDelta: -20, followerDelta: +40000, friendshipDelta: -30 },
+                            { text: "Borrar el video y disculparte en privado con Leo", nextScene: "c1_end_chapter", mentalDelta: +10, followerDelta: -5000, friendshipDelta: +15 }
+                        ]
+                    },
+                    c1_friends_first: {
+                        location: "Cafetería del Barrio - Noche",
+                        heading: "El Valor de lo Real",
+                        body: "Pasas una noche increíble riendo con Leo. Sin embargo, al mirar tu teléfono por la noche, notas que el algoritmo te ha 'castigado' reduciendo tu alcance. Un reclutador de una famosa 'Hype House' de influencers te envía un mensaje directo.",
+                        algorithmWhisper: "Atención desviada. El sistema requiere consistencia o tu perfil caerá en el olvido.",
+                        bgImage: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1000&auto=format&fit=crop&q=80",
+                        comments: [
+                            { user: "talent_scout", text: "Revisa tus DMs urgente 📩" }
+                        ],
+                        choices: [
+                            { text: "Aceptar la reunión con el reclutador de la Creator Mansion", nextScene: "c1_end_chapter", mentalDelta: -5, followerDelta: +8000, friendshipDelta: -5 },
+                            { text: "Rechazar la oferta y seguir creando contenido a tu ritmo", nextScene: "c1_end_chapter", mentalDelta: +20, followerDelta: +1000, friendshipDelta: +10 }
+                        ]
+                    },
+                    c1_end_chapter: {
+                        isChapterEnd: true
+                    }
+                }
+            },
+            {
+                title: "Capítulo 2: La Mansión de Creadores",
+                scenes: {
+                    c2_start: {
+                        location: "Los Ángeles - Creator House Luxury",
+                        heading: "Luces, Cámara y Contratos",
+                        body: "Te has mudado a una mansión de creadores de contenido. El patrocinador principal te exige promocionar una bebida energética dudosa dirigida a adolescentes a cambio de pagar tu renta de lujo. Tu salud mental está resintiéndose por la presión.",
+                        algorithmWhisper: "Monetización prioritaria. El público responde a la ostentación visual.",
+                        bgImage: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1000&auto=format&fit=crop&q=80",
+                        comments: [
+                            { user: "sponsor_official", text: "Esperamos el post antes de las 5 PM." },
+                            { user: "fan_girl99", text: "¡Estás cambiando mucho desde que llegaste ahí!" }
+                        ],
+                        choices: [
+                            { text: "Firmar el contrato abusivo y promocionar el producto falso", nextScene: "c2_fake_brand", mentalDelta: -25, followerDelta: +50000, friendshipDelta: -20 },
+                            { text: "Denunciar la marca en un video honesto sin filtros", nextScene: "c2_whistleblower", mentalDelta: +15, followerDelta: -10000, friendshipDelta: +25 }
+                        ]
+                    },
+                    c2_fake_brand: {
+                        location: "Estudio de Grabación - Mansión",
+                        heading: "Falsa Felicidad",
+                        body: "El video es un éxito comercial, pero comentarios acusándote de 'vendido' comienzan a inundar tus redes. El dueño de la mansión te presiona para fingir una relación falsa con otro influencer para mantener los titulares.",
+                        algorithmWhisper: "Emparejamiento artificial: aumento presupuestado de interacciones de un 500%.",
+                        bgImage: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=1000&auto=format&fit=crop&q=80",
+                        qte: { prompt: "¡Finge una sonrisa perfecta frente a las cámaras!", key: "E", time: 3.0 },
+                        comments: [
+                            { user: "fake_love", text: "HACEN TAN BUENA PAREJA OMG ❤️" },
+                            { user: "truth_seeker", text: "Todo esto es tan falso que da pena" }
+                        ],
+                        choices: [
+                            { text: "Aceptar el noviazgo falso por pura estrategia de alcance", nextScene: "c2_end_chapter", mentalDelta: -30, followerDelta: +100000, friendshipDelta: -30 },
+                            { text: "Romper la cámara y abandonar la fiesta de la mansión", nextScene: "c2_end_chapter", mentalDelta: +20, followerDelta: -20000, friendshipDelta: +20 }
+                        ]
+                    },
+                    c2_whistleblower: {
+                        location: "Habitación de la Mansión",
+                        heading: "La Furia del Sistema",
+                        body: "Tu video denunciando los abusos se vuelve viral. Las marcas te amenazan con demandas legales y los otros creadores de la mansión te aíslan en los pasillos.",
+                        algorithmWhisper: "Alerta de crisis: Polarización extrema de audiencia.",
+                        bgImage: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1000&auto=format&fit=crop&q=80",
+                        comments: [
+                            { user: "justice_now", text: "¡Gracias por ser valiente y sincero/a!" },
+                            { user: "hater_404", text: "Arruinaste tu propia carrera lol" }
+                        ],
+                        choices: [
+                            { text: "Sostener tu postura y alistar un equipo legal independiente", nextScene: "c2_end_chapter", mentalDelta: +10, followerDelta: +15000, friendshipDelta: +15 },
+                            { text: "Ceder por miedo a la quiebra y publicar una retractación", nextScene: "c2_end_chapter", mentalDelta: -20, followerDelta: -30000, friendshipDelta: -15 }
+                        ]
+                    },
+                    c2_end_chapter: {
+                        isChapterEnd: true
+                    }
+                }
+            },
+            {
+                title: "Capítulo 3: La Gran Cancelación",
+                scenes: {
+                    c3_start: {
+                        location: "Set de Transmisión - En Vivo",
+                        heading: "La Tormenta Perfecta",
+                        body: "Se filtra un clip fuera de contexto de tu pasado. Internet te exige explicaciones inmediatas. Un 'Hate-Train' masivo está destruyendo tu reputación en tiempo real con millones de tweets en tu contra.",
+                        algorithmWhisper: "Métrica de odio: El engagement negativo produce el mayor número de impresiones de la plataforma.",
+                        bgImage: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1000&auto=format&fit=crop&q=80",
+                        comments: [
+                            { user: "cancel_boy", text: "CANCELADO/A PARA SIEMPRE ❌" },
+                            { user: "sad_fan", text: "No puedo creer que fueras así..." }
+                        ],
+                        choices: [
+                            { text: "Realizar un Stream de Disculpas en Vivo sin guión", nextScene: "c3_stream_apology", mentalDelta: -15, followerDelta: -50000, friendshipDelta: +10 },
+                            { text: "Desaparecer de las redes por completo sin dar explicaciones", nextScene: "c3_ghosting", mentalDelta: +10, followerDelta: -150000, friendshipDelta: -10 }
+                        ]
+                    },
+                    c3_stream_apology: {
+                        location: "Cámara Streamer - Directo",
+                        heading: "Juicio Público en Tiempo Real",
+                        body: "Estás en vivo frente a 200,000 espectadores furiosos. La presión en tu pecho es abrumadora; sientes el pulso acelerado. Las opciones que digas ahora definirán el resto de tu vida.",
+                        algorithmWhisper: "Analizando micro-expresiones faciales para detectar veracidad.",
+                        bgImage: "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=1000&auto=format&fit=crop&q=80",
+                        qte: { prompt: "¡Mantén la respiración bajo control para no colapsar!", key: "A", time: 2.5 },
+                        comments: [
+                            { user: "judge_dread", text: "Se nota que está actuando" },
+                            { user: "real_supporter", text: "Todos cometemos errores, déjenlo/a hablar" }
+                        ],
+                        choices: [
+                            { text: "Asumir la culpa total con humildad y mostrar la verdad", nextScene: "c3_end_chapter", mentalDelta: +20, followerDelta: -20000, friendshipDelta: +30 },
+                            { text: "Culpar a tu equipo de producción y a la manipulación mediática", nextScene: "c3_end_chapter", mentalDelta: -35, followerDelta: +10000, friendshipDelta: -40 }
+                        ]
+                    },
+                    c3_ghosting: {
+                        location: "Casa Familiar - Aislado/a",
+                        heading: "El Silencio de las Pantallas",
+                        body: "Apagaste tu teléfono durante semanas. La tormenta pasó, pero el silencio es ensordecedor. Tu viejo amigo Leo toca a la puerta con una pizza y una sonrisa sincera.",
+                        algorithmWhisper: "Conexión interrumpida. Usuario inactivo en los servidores.",
+                        bgImage: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1000&auto=format&fit=crop&q=80",
+                        comments: [],
+                        choices: [
+                            { text: "Abrir la puerta y reconstruir tu vida real alejado del teléfono", nextScene: "c3_end_chapter", mentalDelta: +30, followerDelta: -100000, friendshipDelta: +50 },
+                            { text: "Prender el teléfono en secreto por la noche para ver si aún te recuerdan", nextScene: "c3_end_chapter", mentalDelta: -20, followerDelta: +5000, friendshipDelta: -20 }
+                        ]
+                    },
+                    c3_end_chapter: {
+                        isChapterEnd: true
+                    }
+                }
+            },
+            {
+                title: "Capítulo 4: Redención o Colapso (Capítulo Final)",
+                scenes: {
+                    c4_start: {
+                        location: "Auditorio de la Conferencia CreatorCon",
+                        heading: "El Destino Final",
+                        body: "Ha pasado un año desde los eventos dramáticos. Estás invitado/a al escenario principal del mayor evento de redes digitales para dar el discurso de clausura. La audiencia aguarda en silencio.",
+                        algorithmWhisper: "Cálculo final de compatibilidad con la Matriz Digital...",
+                        bgImage: "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=1000&auto=format&fit=crop&q=80",
+                        comments: [
+                            { user: "event_host", text: "Damas y caballeros, en el escenario..." }
+                        ],
+                        choices: [
+                            { text: "Dar un discurso revelando la farsa de las redes y anunciar tu retiro", nextScene: "ending_freedom", mentalDelta: +50, followerDelta: -500000, friendshipDelta: +50 },
+                            { text: "Abrazar por completo el personaje digital y prometer un show más grande", nextScene: "ending_puppet", mentalDelta: -50, followerDelta: +1000000, friendshipDelta: -50 }
+                        ]
+                    },
+                    ending_freedom: {
+                        location: "Playa al Atardecer - Retiro Silencioso",
+                        heading: "FINAL: VERDAD SIN FILTROS",
+                        body: "Dejaste atrás el algoritmo. Ahora creas arte sincero sin preocuparte por las vistas ni el dinero de las marcas. Tienes pocos amigos, pero son de verdad. Eres finalmente libre.",
+                        algorithmWhisper: "SISTEMA DESCONECTADO. El usuario recuperó el control de su mente.",
+                        bgImage: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1000&auto=format&fit=crop&q=80",
+                        comments: [
+                            { user: "leo_friend", text: "Orgulloso de ti siempre ❤️" }
+                        ],
+                        choices: []
+                    },
+                    ending_puppet: {
+                        location: "Penthouse de Lujo - Soledad Digital",
+                        heading: "FINAL: MARIONETA DE LAS MARCAS",
+                        body: "Tienes 10 millones de seguidores y contratos millonarios. Sin embargo, no recuerdas cuándo fue la última vez que sonreíste sin que una cámara te estuviera grabando. El Algoritmo es tu único dueño.",
+                        algorithmWhisper: "SISTEMA OPTIMIZADO AL 100%. Rendimiento completo del avatar.",
+                        bgImage: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1000&auto=format&fit=crop&q=80",
+                        comments: [
+                            { user: "bot_99", text: "Great post! Follow back" }
+                        ],
+                        choices: []
+                    }
+                }
+            }
+        ];
+
+        // START GAME ENGINE
+        function startGame() {
+            playSound('click');
+            document.getElementById('screen-start').classList.add('hidden');
+            document.getElementById('screen-gameplay').classList.remove('hidden');
+            loadScene(CHAPTERS[0].scenes.c1_start);
+        }
+
+        // LOAD AND RENDER SCENE DATA
+        function loadScene(sceneData) {
+            if (sceneData.isChapterEnd) {
+                showChapterSummary();
+                return;
+            }
+
+            const name = gameState.protagonist;
+            document.getElementById('current-character-name').innerText = name;
+            document.getElementById('chapter-title-badge').innerText = CHAPTERS[gameState.currentChapterIndex].title;
+
+            // Text processing
+            document.getElementById('narrative-location').innerText = sceneData.location.replace('{P}', name);
+            document.getElementById('narrative-heading').innerText = sceneData.heading;
+            document.getElementById('narrative-body').innerText = sceneData.body.replace('{P}', name);
+            document.getElementById('algorithm-thought-text').innerText = sceneData.algorithmWhisper || "Procesando...";
+
+            // Background update
+            if (sceneData.bgImage) {
+                document.getElementById('scene-bg-image').style.backgroundImage = `url('${sceneData.bgImage}')`;
+            }
+
+            // Stream Chat Feed Update
+            const chatFeed = document.getElementById('chat-feed');
+            chatFeed.innerHTML = '';
+            if (sceneData.comments) {
+                sceneData.comments.forEach(c => {
+                    const msg = document.createElement('div');
+                    msg.className = 'p-2 rounded-xl bg-white/5 border border-white/5 text-gray-200 animate-fade-in';
+                    msg.innerHTML = `<span class="font-bold text-tiktokCyan mr-1">@${c.user}:</span> ${c.text}`;
+                    chatFeed.appendChild(msg);
+                });
+            }
+
+            // Render Choices or Final Notice
+            const choicesContainer = document.getElementById('choices-container');
+            choicesContainer.innerHTML = '';
+
+            // Handle QTE Mini-Game if present
+            const qteBox = document.getElementById('qte-container');
+            if (sceneData.qte) {
+                setupQTE(sceneData.qte);
+            } else {
+                qteBox.classList.add('hidden');
+            }
+
+            if (sceneData.choices && sceneData.choices.length > 0) {
+                sceneData.choices.forEach(choice => {
+                    const btn = document.createElement('button');
+                    btn.className = 'w-full text-left p-4 rounded-2xl bg-white/5 hover:bg-tiktokPink/20 border border-white/10 hover:border-tiktokPink text-white text-xs sm:text-sm font-medium transition transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-between group';
+                    btn.innerHTML = `
+                        <span>${choice.text}</span>
+                        <i class="fa-solid fa-chevron-right text-gray-500 group-hover:text-tiktokPink transition"></i>
+                    `;
+                    btn.onclick = () => makeChoice(choice);
+                    choicesContainer.appendChild(btn);
+                });
+            } else {
+                // Game Over / Final Scene Button
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-center p-4 rounded-2xl bg-gradient-to-r from-tiktokPink to-purple-600 text-white font-bold text-sm shadow-xl';
+                btn.innerText = 'REINICIAR EXPERIENCIA';
+                btn.onclick = () => location.reload();
+                choicesContainer.appendChild(btn);
+            }
+
+            updateHUD();
+        }
+
+        // QTE Engine Variables
+        let qteTimer = null;
+
+        function setupQTE(qteData) {
+            playSound('heartbeat');
+            const qteBox = document.getElementById('qte-container');
+            const qtePrompt = document.getElementById('qte-prompt');
+            const qteBtn = document.getElementById('qte-btn');
+            const timerBar = document.getElementById('qte-timer-bar');
+
+            qteBox.classList.remove('hidden');
+            qtePrompt.innerText = qteData.prompt;
+            qteBtn.innerText = qteData.key;
+
+            timerBar.style.width = '100%';
+            let timeLeft = qteData.time;
+            const step = 0.1;
+
+            if (qteTimer) clearInterval(qteTimer);
+
+            qteTimer = setInterval(() => {
+                timeLeft -= step;
+                const percentage = (timeLeft / qteData.time) * 100;
+                timerBar.style.width = `${Math.max(0, percentage)}%`;
+
+                if (timeLeft <= 0) {
+                    clearInterval(qteTimer);
+                    // QTE Failed
+                    qteBox.classList.add('hidden');
+                    gameState.mentalHealth = Math.max(0, gameState.mentalHealth - 15);
+                    updateHUD();
+                }
+            }, step * 1000);
+        }
+
+        function triggerQTESuccess() {
+            playSound('qte-success');
+            if (qteTimer) clearInterval(qteTimer);
+            const qteBox = document.getElementById('qte-container');
+            qteBox.classList.add('hidden');
+            gameState.mentalHealth = Math.min(100, gameState.mentalHealth + 5);
+            updateHUD();
+        }
+
+        // HANDLE NARRATIVE SELECTION
+        function makeChoice(choice) {
+            playSound('click');
+
+            // Apply metric updates
+            if (choice.mentalDelta) gameState.mentalHealth = Math.max(0, Math.min(100, gameState.mentalHealth + choice.mentalDelta));
+            if (choice.followerDelta) gameState.followers = Math.max(0, gameState.followers + choice.followerDelta);
+            if (choice.friendshipDelta) gameState.friendship = Math.max(0, Math.min(100, gameState.friendship + choice.friendshipDelta));
+
+            // Log choice history
+            gameState.choicesHistory.push({
+                chapter: CHAPTERS[gameState.currentChapterIndex].title,
+                choiceText: choice.text
+            });
+
+            // Load next scene
+            const currentChapterScenes = CHAPTERS[gameState.currentChapterIndex].scenes;
+            const nextScene = currentChapterScenes[choice.nextScene];
+            loadScene(nextScene);
+        }
+
+        // UPDATE METRIC HUDS
+        function updateHUD() {
+            document.getElementById('bar-mental').style.width = `${gameState.mentalHealth}%`;
+            document.getElementById('val-mental').innerText = `${gameState.mentalHealth}%`;
+
+            // Format Followers
+            let formattedFollowers = gameState.followers;
+            if (gameState.followers >= 1000000) {
+                formattedFollowers = (gameState.followers / 1000000).toFixed(1) + 'M';
+            } else if (gameState.followers >= 1000) {
+                formattedFollowers = (gameState.followers / 1000).toFixed(1) + 'K';
+            }
+            document.getElementById('val-followers').innerText = formattedFollowers;
+            document.getElementById('val-friendship').innerText = `${gameState.friendship}%`;
+        }
+
+        // SHOW END OF CHAPTER FLOWCHART SUMMARY
+        function showChapterSummary() {
+            playSound('glitch');
+            document.getElementById('screen-gameplay').classList.add('hidden');
+            document.getElementById('screen-summary').classList.remove('hidden');
+
+            document.getElementById('summary-title').innerText = `RESUMEN: ${CHAPTERS[gameState.currentChapterIndex].title}`;
+            
+            const flowchart = document.getElementById('summary-flowchart');
+            flowchart.innerHTML = '';
+
+            gameState.choicesHistory.forEach((item, idx) => {
+                const node = document.createElement('div');
+                node.className = 'flex items-center space-x-3 text-gray-300 border-l-2 border-tiktokCyan pl-4 py-1';
+                node.innerHTML = `
+                    <span class="text-tiktokCyan font-bold">Paso #${idx + 1}:</span>
+                    <span>${item.choiceText}</span>
+                `;
+                flowchart.appendChild(node);
+            });
+
+            document.getElementById('summary-stat-mental').innerText = `${gameState.mentalHealth}%`;
+            document.getElementById('summary-stat-followers').innerText = document.getElementById('val-followers').innerText;
+            document.getElementById('summary-stat-friendship').innerText = `${gameState.friendship}%`;
+        }
+
+        // ADVANCE TO NEXT CHAPTER
+        function advanceChapter() {
+            playSound('click');
+            gameState.currentChapterIndex++;
+            
+            if (gameState.currentChapterIndex < CHAPTERS.length) {
+                document.getElementById('screen-summary').classList.add('hidden');
+                document.getElementById('screen-gameplay').classList.remove('hidden');
+                
+                const firstSceneKey = Object.keys(CHAPTERS[gameState.currentChapterIndex].scenes)[0];
+                loadScene(CHAPTERS[gameState.currentChapterIndex].scenes[firstSceneKey]);
+            }
+        }
+    </script>
+</body>
+</html>
